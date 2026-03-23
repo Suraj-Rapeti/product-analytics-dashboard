@@ -2,12 +2,26 @@ import React from 'react';
 import { Sparkles, TrendingUp, Info, AlertTriangle } from 'lucide-react';
 
 const typeConfig = {
+  critical: {
+    icon:       AlertTriangle,
+    iconColor:  'text-rose-500 dark:text-rose-400',
+    border:     'border-rose-400 dark:border-rose-500/60',
+    badge:      'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400',
+    badgeLabel: 'Critical',
+  },
+  healthy: {
+    icon:       TrendingUp,
+    iconColor:  'text-emerald-500 dark:text-emerald-400',
+    border:     'border-emerald-400 dark:border-emerald-500/60',
+    badge:      'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
+    badgeLabel: 'Healthy',
+  },
   positive: {
     icon:       TrendingUp,
     iconColor:  'text-emerald-500 dark:text-emerald-400',
     border:     'border-emerald-400 dark:border-emerald-500/60',
     badge:      'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-    badgeLabel: 'Positive',
+    badgeLabel: 'Healthy',
   },
   info: {
     icon:       Info,
@@ -25,9 +39,37 @@ const typeConfig = {
   },
 };
 
+const splitInsightDescription = (insight) => {
+  const raw = (insight?.description || '').trim();
+  const actionMarker = 'Action:';
+
+  let action = '';
+  let beforeAction = raw;
+  if (raw.includes(actionMarker)) {
+    const [left, right] = raw.split(actionMarker);
+    beforeAction = (left || '').trim();
+    action = (right || '').trim();
+  }
+
+  const parts = beforeAction
+    .split('.')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const metric = parts[0] || beforeAction || '-';
+  const interpretation = parts.slice(1).join('. ') || (action ? '-' : beforeAction || '-');
+
+  return {
+    metric,
+    interpretation,
+    action: action || '-',
+  };
+};
+
 function InsightItem({ insight }) {
-  const cfg = typeConfig[insight.type] || typeConfig.info;
+  const cfg = typeConfig[insight.type] || typeConfig.warning;
   const Icon = cfg.icon;
+  const content = splitInsightDescription(insight);
 
   return (
     <div className={`flex gap-3 pl-4 border-l-2 ${cfg.border}`}>
@@ -41,9 +83,11 @@ function InsightItem({ insight }) {
             {cfg.badgeLabel}
           </span>
         </div>
-        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-          {insight.description}
-        </p>
+        <div className="mt-1 space-y-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          <p><span className="font-semibold text-slate-700 dark:text-slate-200">Metric:</span> {content.metric}</p>
+          <p><span className="font-semibold text-slate-700 dark:text-slate-200">Interpretation:</span> {content.interpretation}</p>
+          <p><span className="font-semibold text-slate-700 dark:text-slate-200">Action:</span> {content.action}</p>
+        </div>
       </div>
     </div>
   );

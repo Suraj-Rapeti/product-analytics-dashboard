@@ -77,6 +77,18 @@ function Dashboard() {
   const [userSignupFilter, setUserSignupFilter] = useState('all');
   const [usersPerPage, setUsersPerPage] = useState(10);
   const [currentUsersPage, setCurrentUsersPage] = useState(1);
+  const [revenueChartPreset, setRevenueChartPreset] = useState('30d');
+  const [revenueChartStartDate, setRevenueChartStartDate] = useState('');
+  const [revenueChartEndDate, setRevenueChartEndDate] = useState('');
+  const [ordersChartPreset, setOrdersChartPreset] = useState('30d');
+  const [ordersChartStartDate, setOrdersChartStartDate] = useState('');
+  const [ordersChartEndDate, setOrdersChartEndDate] = useState('');
+  const [eventsChartPreset, setEventsChartPreset] = useState('30d');
+  const [eventsChartStartDate, setEventsChartStartDate] = useState('');
+  const [eventsChartEndDate, setEventsChartEndDate] = useState('');
+  const [monthlyChartPreset, setMonthlyChartPreset] = useState('all');
+  const [monthlyChartStartDate, setMonthlyChartStartDate] = useState('');
+  const [monthlyChartEndDate, setMonthlyChartEndDate] = useState('');
 
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -116,6 +128,37 @@ function Dashboard() {
 
   timelineMinDate.setHours(0, 0, 0, 0);
   timelineMaxDate.setHours(0, 0, 0, 0);
+
+  const resolveChartRange = (preset, customStart, customEnd) => {
+    const rangeEnd = new Date(timelineMaxDate);
+    let rangeStart = new Date(timelineMaxDate);
+
+    if (preset === 'all') {
+      rangeStart = new Date(timelineMinDate);
+    } else if (preset === 'custom') {
+      rangeStart = getDateFromInput(customStart, timelineMinDate);
+      const customRangeEnd = getDateFromInput(customEnd, timelineMaxDate);
+      rangeEnd.setTime(customRangeEnd.getTime());
+    } else {
+      const presetOption = PRESET_OPTIONS.find((item) => item.id === preset);
+      const days = presetOption?.days || 30;
+      rangeStart.setDate(rangeStart.getDate() - (days - 1));
+    }
+
+    if (rangeStart > rangeEnd) {
+      const temp = new Date(rangeStart);
+      rangeStart.setTime(rangeEnd.getTime());
+      rangeEnd.setTime(temp.getTime());
+    }
+
+    rangeStart.setHours(0, 0, 0, 0);
+    rangeEnd.setHours(23, 59, 59, 999);
+
+    return {
+      start: rangeStart,
+      end: rangeEnd,
+    };
+  };
 
   const computedRangeEnd = new Date(timelineMaxDate);
   let computedRangeStart = new Date(timelineMaxDate);
@@ -191,12 +234,145 @@ function Dashboard() {
   }, [currentUsersPage, totalUsersPages]);
 
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const uniqueBuyerCount = new Set(filteredOrders.map((order) => order.userId).filter(Boolean)).size;
+  const conversionRate = filteredUsers.length > 0 ? (uniqueBuyerCount / filteredUsers.length) * 100 : 0;
+  const averageOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
+
+  const productOrderCount = {};
+  filteredOrders.forEach((order) => {
+    const product = order.product || 'Unknown';
+    const quantity = order.quantity || 1;
+    productOrderCount[product] = (productOrderCount[product] || 0) + quantity;
+  });
+
+  const sortedProducts = Object.entries(productOrderCount).sort((a, b) => b[1] - a[1]);
+  const topProductName = sortedProducts[0]?.[0] || 'N/A';
+  const topProductUnits = sortedProducts[0]?.[1] || 0;
 
   const toDateKey = (dateObj) => [
     dateObj.getFullYear(),
     String(dateObj.getMonth() + 1).padStart(2, '0'),
     String(dateObj.getDate()).padStart(2, '0'),
   ].join('-');
+
+  const isWithinRange = (dateObj, range) => dateObj && dateObj >= range.start && dateObj <= range.end;
+
+  const revenueChartRange = resolveChartRange(revenueChartPreset, revenueChartStartDate, revenueChartEndDate);
+  const ordersChartRange = resolveChartRange(ordersChartPreset, ordersChartStartDate, ordersChartEndDate);
+  const eventsChartRange = resolveChartRange(eventsChartPreset, eventsChartStartDate, eventsChartEndDate);
+  const monthlyChartRange = resolveChartRange(monthlyChartPreset, monthlyChartStartDate, monthlyChartEndDate);
+
+  const revenueChartStartDay = new Date(revenueChartRange.start);
+  revenueChartStartDay.setHours(0, 0, 0, 0);
+  const revenueChartEndDay = new Date(revenueChartRange.end);
+  revenueChartEndDay.setHours(0, 0, 0, 0);
+
+  const revenueDailyMapForChart = {};
+  orders.forEach((order) => {
+    const orderDate = parseDateSafe(order.date);
+    if (!isWithinRange(orderDate, revenueChartRange)) return;
+
+    const normalized = new Date(orderDate);
+    normalized.setHours(0, 0, 0, 0);
+    const dateKey = toDateKey(normalized);
+    revenueDailyMapForChart[dateKey] = (revenueDailyMapForChart[dateKey] || 0) + (order.amount || 0);
+  });
+
+  const revenueChartDays = Math.max(
+    1,
+    Math.floor((revenueChartEndDay - revenueChartStartDay) / (1000 * 60 * 60 * 24)) + 1,
+  );
+
+  const revenueChartData = Array.from({ length: revenueChartDays }, (_, index) => {
+    const current = new Date(revenueChartStartDay);
+    current.setDate(revenueChartStartDay.getDate() + index);
+    const dateKey = toDateKey(current);
+    return {
+      name: dateKey,
+      revenue: revenueDailyMapForChart[dateKey] || 0,
+    };
+  });
+
+  const ordersChartStartDay = new Date(ordersChartRange.start);
+  ordersChartStartDay.setHours(0, 0, 0, 0);
+  const ordersChartEndDay = new Date(ordersChartRange.end);
+  ordersChartEndDay.setHours(0, 0, 0, 0);
+
+  const dailyOrdersMapForChart = {};
+  orders.forEach((order) => {
+    const orderDate = parseDateSafe(order.date);
+    if (!isWithinRange(orderDate, ordersChartRange)) return;
+
+    const normalized = new Date(orderDate);
+    normalized.setHours(0, 0, 0, 0);
+    const dateKey = toDateKey(normalized);
+    dailyOrdersMapForChart[dateKey] = (dailyOrdersMapForChart[dateKey] || 0) + 1;
+  });
+
+  const ordersChartDays = Math.max(
+    1,
+    Math.floor((ordersChartEndDay - ordersChartStartDay) / (1000 * 60 * 60 * 24)) + 1,
+  );
+
+  const ordersChartData = Array.from({ length: ordersChartDays }, (_, index) => {
+    const current = new Date(ordersChartStartDay);
+    current.setDate(ordersChartStartDay.getDate() + index);
+    const dateKey = toDateKey(current);
+    return {
+      dateKey,
+      dayLabel: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      orders: dailyOrdersMapForChart[dateKey] || 0,
+    };
+  });
+
+  const eventPalette = ['#0EA5E9', '#14B8A6', '#6366F1', '#F59E0B', '#F43F5E', '#8B5CF6'];
+  const eventCountsForChart = {};
+  events.forEach((event) => {
+    const eventDate = parseDateSafe(event.timestamp);
+    if (!isWithinRange(eventDate, eventsChartRange)) return;
+    const type = event.type || 'unknown';
+    eventCountsForChart[type] = (eventCountsForChart[type] || 0) + 1;
+  });
+
+  const eventsChartData = Object.keys(eventCountsForChart).map((key, index) => ({
+    name: key,
+    value: eventCountsForChart[key],
+    color: eventPalette[index % eventPalette.length],
+  }));
+
+  const monthlyChartStartMonth = new Date(monthlyChartRange.start.getFullYear(), monthlyChartRange.start.getMonth(), 1);
+  const monthlyChartEndMonth = new Date(monthlyChartRange.end.getFullYear(), monthlyChartRange.end.getMonth(), 1);
+
+  const monthlyRevenueMapForChart = {};
+  orders.forEach((order) => {
+    const orderDate = parseDateSafe(order.date);
+    if (!isWithinRange(orderDate, monthlyChartRange)) return;
+    const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+    monthlyRevenueMapForChart[monthKey] = (monthlyRevenueMapForChart[monthKey] || 0) + (order.amount || 0);
+  });
+
+  const monthlyChartRangeLength =
+    (monthlyChartEndMonth.getFullYear() - monthlyChartStartMonth.getFullYear()) * 12 +
+    (monthlyChartEndMonth.getMonth() - monthlyChartStartMonth.getMonth()) +
+    1;
+
+  const monthlyRevenueChartData = Array.from({ length: Math.max(1, monthlyChartRangeLength) }, (_, index) => {
+    const monthDate = new Date(monthlyChartStartMonth.getFullYear(), monthlyChartStartMonth.getMonth() + index, 1);
+    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+
+    return {
+      name: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      revenue: monthlyRevenueMapForChart[monthKey] || 0,
+    };
+  });
+
+  const revenueChartSubtitle = getRangeSubtitle(revenueChartStartDay, revenueChartEndDay);
+  const ordersChartSubtitle = getRangeSubtitle(ordersChartStartDay, ordersChartEndDay);
+  const eventsChartSubtitle = getRangeSubtitle(eventsChartRange.start, eventsChartRange.end);
+  const monthlyChartSubtitle = getRangeSubtitle(monthlyChartStartMonth, monthlyChartRange.end);
 
   // 🔥 REVENUE CHART DATA (daily, aggregated)
   const dailyRevenueMap = {};
@@ -261,6 +437,34 @@ function Dashboard() {
     };
   });
 
+  const allTimeMonthlyRevenueMap = {};
+  orders.forEach((order) => {
+    const orderDate = new Date(order.date);
+    if (Number.isNaN(orderDate.getTime())) return;
+
+    const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+    allTimeMonthlyRevenueMap[monthKey] = (allTimeMonthlyRevenueMap[monthKey] || 0) + (order.amount || 0);
+  });
+
+  const allTimeMonthlyStart = new Date(timelineMinDate.getFullYear(), timelineMinDate.getMonth(), 1);
+  const allTimeMonthlyEnd = new Date(timelineMaxDate.getFullYear(), timelineMaxDate.getMonth(), 1);
+  const allTimeMonthlyRangeLength =
+    (allTimeMonthlyEnd.getFullYear() - allTimeMonthlyStart.getFullYear()) * 12 +
+    (allTimeMonthlyEnd.getMonth() - allTimeMonthlyStart.getMonth()) +
+    1;
+
+  const insightsMonthlyRevenueData = Array.from({ length: allTimeMonthlyRangeLength }, (_, index) => {
+    const monthDate = new Date(allTimeMonthlyStart.getFullYear(), allTimeMonthlyStart.getMonth() + index, 1);
+    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+
+    return {
+      name: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      revenue: allTimeMonthlyRevenueMap[monthKey] || 0,
+    };
+  });
+
+  const insightsRangeSubtitle = getRangeSubtitle(allTimeMonthlyStart, timelineMaxDate);
+
   const dailyOrdersMap = {};
   filteredOrders.forEach((order) => {
     const orderDate = new Date(order.date);
@@ -286,24 +490,87 @@ function Dashboard() {
     };
   });
 
-  // 🔥 EVENTS PIE CHART (GROUPED)
-  const eventCounts = {};
-  filteredEvents.forEach(e => {
-    const type = e.type || "unknown";
-    eventCounts[type] = (eventCounts[type] || 0) + 1;
-  });
-
-  const eventPalette = ['#0EA5E9', '#14B8A6', '#6366F1', '#F59E0B', '#F43F5E', '#8B5CF6'];
-  const eventData = Object.keys(eventCounts).map((key, index) => ({
-    name: key,
-    value: eventCounts[key],
-    color: eventPalette[index % eventPalette.length],
-  }));
-
   // 🔥 AI INSIGHTS
-  const insight = generateInsights(filteredUsers, filteredOrders);
+  const insight = generateInsights(filteredUsers, filteredOrders, filteredEvents);
+
+  const insightPriority = {
+    critical: 0,
+    warning: 1,
+    healthy: 2,
+    positive: 2,
+    info: 3,
+  };
+
+  const keyInsightItems = [...insight]
+    .filter((item) => item.id !== 'insight-key-takeaway')
+    .sort((a, b) => (insightPriority[a.type] ?? 99) - (insightPriority[b.type] ?? 99))
+    .slice(0, 3)
+    .map((item) => {
+      const actionPart = item.description?.includes('Action:')
+        ? item.description.split('Action:')[1].trim()
+        : item.description;
+
+      const headline = actionPart
+        ?.split('.')
+        .map((part) => part.trim())
+        .filter(Boolean)[0] || item.title;
+
+      return {
+        id: item.id,
+        emoji: item.type === 'critical' ? '🚨' : item.type === 'warning' ? '⚠️' : '📈',
+        text: `${item.title}: ${headline}`,
+      };
+    });
 
   const rangeSubtitle = getRangeSubtitle(rangeStartDay, rangeEndDay);
+
+  const renderChartRangeControls = ({
+    label,
+    preset,
+    onPresetChange,
+    startDate,
+    onStartDateChange,
+    endDate,
+    onEndDateChange,
+  }) => (
+    <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{label}</p>
+        <select
+          value={preset}
+          onChange={(e) => onPresetChange(e.target.value)}
+          className="h-9 sm:max-w-[180px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200"
+        >
+          {PRESET_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.id === 'all' ? 'All Time' : option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {preset === 'custom' && (
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={startDate}
+            min={formatInputDate(timelineMinDate)}
+            max={formatInputDate(timelineMaxDate)}
+            onChange={(e) => onStartDateChange(e.target.value)}
+            className="h-9 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200"
+          />
+          <input
+            type="date"
+            value={endDate}
+            min={formatInputDate(timelineMinDate)}
+            max={formatInputDate(timelineMaxDate)}
+            onChange={(e) => onEndDateChange(e.target.value)}
+            className="h-9 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200"
+          />
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen app-shell">
@@ -353,21 +620,20 @@ function Dashboard() {
 
           <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-900/75 backdrop-blur-md p-4 md:p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] animate-fade-up">
             <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Chart range</p>
-                {PRESET_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => setSelectedPreset(option.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                      selectedPreset === option.id
-                        ? 'bg-cyan-500 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Time filter</p>
+                <select
+                  value={selectedPreset}
+                  onChange={(e) => setSelectedPreset(e.target.value)}
+                  className="h-10 sm:max-w-[220px] px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-200"
+                  aria-label="Time filter"
+                >
+                  {PRESET_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.id === 'all' ? 'All Time' : option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {selectedPreset === 'custom' && (
@@ -405,24 +671,78 @@ function Dashboard() {
             {/* DASHBOARD */}
             {activeNav === 'dashboard' && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5 animate-fade-up" style={{ animationDelay: '80ms' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 md:gap-5 animate-fade-up" style={{ animationDelay: '80ms' }}>
                   <MetricCard title="Users" value={filteredUsers.length.toLocaleString()} change="+8.2%" trend="up" icon="Users" color="blue" />
                   <MetricCard title="Orders" value={filteredOrders.length.toLocaleString()} change="+5.4%" trend="up" icon="ShoppingCart" color="indigo" />
                   <MetricCard title="Revenue" value={`$${totalRevenue.toLocaleString()}`} change="+11.7%" trend="up" icon="DollarSign" color="emerald" />
+                  <MetricCard
+                    title="Conversion Rate"
+                    value={`${Math.round(conversionRate)}%`}
+                    change={`${Math.round(conversionRate)}%`}
+                    trend={conversionRate >= 35 ? 'up' : 'down'}
+                    icon="TrendingUp"
+                    color="blue"
+                  />
+                  <MetricCard
+                    title="Avg Order Value"
+                    value={`$${Math.round(averageOrderValue).toLocaleString()}`}
+                    change={`$${Math.round(averageOrderValue).toLocaleString()}`}
+                    trend={averageOrderValue >= 300 ? 'up' : 'down'}
+                    icon="DollarSign"
+                    color="emerald"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 animate-fade-up" style={{ animationDelay: '150ms' }}>
-                  <RevenueLineChart data={revenueData} subtitle={rangeSubtitle} />
-                  <EventPieChart data={eventData} subtitle={rangeSubtitle} />
+                  <div className="space-y-2">
+                    {renderChartRangeControls({
+                      label: 'Revenue Chart Range',
+                      preset: revenueChartPreset,
+                      onPresetChange: setRevenueChartPreset,
+                      startDate: revenueChartStartDate,
+                      onStartDateChange: setRevenueChartStartDate,
+                      endDate: revenueChartEndDate,
+                      onEndDateChange: setRevenueChartEndDate,
+                    })}
+                    <RevenueLineChart data={revenueChartData} subtitle={revenueChartSubtitle} />
+                  </div>
+                  <div className="space-y-2">
+                    {renderChartRangeControls({
+                      label: 'Orders Chart Range',
+                      preset: ordersChartPreset,
+                      onPresetChange: setOrdersChartPreset,
+                      startDate: ordersChartStartDate,
+                      onStartDateChange: setOrdersChartStartDate,
+                      endDate: ordersChartEndDate,
+                      onEndDateChange: setOrdersChartEndDate,
+                    })}
+                    <OrdersBarChart data={ordersChartData} subtitle={ordersChartSubtitle} />
+                  </div>
                 </div>
 
-                <div className="animate-fade-up" style={{ animationDelay: '220ms' }}>
-                  <OrdersBarChart data={ordersData} subtitle={rangeSubtitle} />
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 animate-fade-up" style={{ animationDelay: '220ms' }}>
+                  <div className="space-y-2">
+                    {renderChartRangeControls({
+                      label: 'Events Chart Range',
+                      preset: eventsChartPreset,
+                      onPresetChange: setEventsChartPreset,
+                      startDate: eventsChartStartDate,
+                      onStartDateChange: setEventsChartStartDate,
+                      endDate: eventsChartEndDate,
+                      onEndDateChange: setEventsChartEndDate,
+                    })}
+                    <EventPieChart data={eventsChartData} subtitle={eventsChartSubtitle} />
+                  </div>
                 </div>
 
-                <div className="animate-fade-up" style={{ animationDelay: '290ms' }}>
-                  <AIInsightsPanel insights={insight} />
-                </div>
+                <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-900/75 backdrop-blur-md p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] animate-fade-up" style={{ animationDelay: '290ms' }}>
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">⚡ Key Insight</h3>
+                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                    {keyInsightItems.map((item) => (
+                      <p key={item.id}>{item.emoji} {item.text}</p>
+                    ))}
+                  </div>
+                </section>
               </>
             )}
 
@@ -515,17 +835,45 @@ function Dashboard() {
 
             {/* INSIGHTS */}
             {activeNav === 'insights' && (
-              <div className="space-y-5">
-                <MonthlyRevenueAreaChart data={monthlyRevenueData} subtitle={rangeSubtitle} />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
-                  <MetricCard title="12M Revenue" value={`$${monthlyRevenueData.reduce((sum, m) => sum + m.revenue, 0).toLocaleString()}`} change="+9.4%" trend="up" icon="DollarSign" color="emerald" />
-                  <MetricCard title="Avg Monthly" value={`$${Math.round(monthlyRevenueData.reduce((sum, m) => sum + m.revenue, 0) / (monthlyRevenueData.length || 1)).toLocaleString()}`} change="+3.1%" trend="up" icon="TrendingUp" color="blue" />
-                  <MetricCard title="Best Month" value={monthlyRevenueData.reduce((best, item) => (item.revenue > best.revenue ? item : best), { name: '-', revenue: -1 }).name} change="Top" trend="up" icon="ShoppingCart" color="indigo" />
+              <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/75 dark:bg-slate-900/70 backdrop-blur-md p-5 md:p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Insights</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Conversion Rate, Funnel Drop-off, and all business signals in Metric - Interpretation - Action format.
+                </p>
+                <div className="mt-5">
+                  <AIInsightsPanel insights={insight} />
                 </div>
+              </section>
+            )}
 
-                <AIInsightsPanel insights={insight} />
-              </div>
+            {/* SETTINGS */}
+            {activeNav === 'settings' && (
+              <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/75 dark:bg-slate-900/70 backdrop-blur-md p-5 md:p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Configure list behavior for the users page.
+                </p>
+
+                <div className="mt-5 max-w-md space-y-2">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="default-users-page-size">
+                    Default users shown per page
+                  </label>
+                  <select
+                    id="default-users-page-size"
+                    value={usersPerPage}
+                    onChange={(e) => setUsersPerPage(Number(e.target.value))}
+                    className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                  >
+                    <option value={10}>10 users</option>
+                    <option value={25}>25 users</option>
+                    <option value={50}>50 users</option>
+                    <option value={100}>100 users</option>
+                  </select>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    This value is used as the users page page-size and can still be changed there anytime.
+                  </p>
+                </div>
+              </section>
             )}
           </div>
         </div>
