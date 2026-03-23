@@ -37,7 +37,7 @@ const CustomTooltip = ({ active, payload }) => {
   );
 };
 
-function EventPieChart({ data = [] }) {
+function EventPieChart({ data = [], subtitle = 'By event type' }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const total = data.length > 0 ? data.reduce((s, d) => s + (d.value || 0), 0) : 0;
 
@@ -45,7 +45,7 @@ function EventPieChart({ data = [] }) {
     <div className="bg-white dark:bg-slate-800/80 dark:ring-1 dark:ring-slate-700/50 rounded-xl shadow-card dark:shadow-none px-5 pt-5 pb-4 flex flex-col transition-colors duration-200">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Event Distribution</h3>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">By event type</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>
       </div>
 
       <ResponsiveContainer width="100%" height={160}>

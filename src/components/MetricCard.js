@@ -5,6 +5,7 @@ const iconMap = {
   Users,
   ShoppingCart,
   DollarSign,
+  TrendingUp,
 };
 
 const colorMap = {

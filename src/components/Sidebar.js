@@ -41,9 +41,9 @@ function NavItem({ item, active, onClick }) {
   );
 }
 
-function Sidebar({ activeNav, onNavChange }) {
+function Sidebar({ activeNav, onNavChange, isOpen, onClose }) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 w-60 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex flex-col transition-colors duration-200">
+    <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-r border-slate-100 dark:border-slate-800 flex flex-col transition-transform duration-300 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-100 dark:border-slate-800">
         <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shadow-sm">
@@ -64,7 +64,10 @@ function Sidebar({ activeNav, onNavChange }) {
             key={item.id}
             item={item}
             active={activeNav === item.id}
-            onClick={onNavChange}
+            onClick={(id) => {
+              onNavChange(id);
+              onClose?.();
+            }}
           />
         ))}
       </nav>
@@ -76,7 +79,10 @@ function Sidebar({ activeNav, onNavChange }) {
             key={item.id}
             item={item}
             active={activeNav === item.id}
-            onClick={onNavChange}
+            onClick={(id) => {
+              onNavChange(id);
+              onClose?.();
+            }}
           />
         ))}
         <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 dark:hover:text-red-400 transition-all duration-150">

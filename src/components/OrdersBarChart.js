@@ -11,11 +11,25 @@ import {
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 
+const formatDateLabel = (dateKey, fallback) => {
+  if (!dateKey) return fallback;
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  });
+};
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
+  const current = payload[0]?.payload || {};
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg shadow-card-hover px-3 py-2">
-      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{label}</p>
+      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+        {formatDateLabel(current.dateKey, label)}
+      </p>
       <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
         {payload[0].value} orders
       </p>
@@ -23,7 +37,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function OrdersBarChart({ data = [] }) {
+function OrdersBarChart({ data = [], subtitle = 'Daily order count' }) {
   const { isDark } = useTheme();
   const max        = data.length > 0 ? Math.max(...data.map((d) => d.orders || 0)) : 0;
   const gridColor  = isDark ? '#1E293B' : '#F1F5F9';
@@ -36,19 +50,21 @@ function OrdersBarChart({ data = [] }) {
     <div className="bg-white dark:bg-slate-800/80 dark:ring-1 dark:ring-slate-700/50 rounded-xl shadow-card dark:shadow-none px-5 pt-5 pb-4 flex flex-col transition-colors duration-200">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Orders Per Day</h3>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Last 7 days</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis
-            dataKey="day"
+            dataKey="dayLabel"
             tick={{ fontSize: 11, fill: tickColor }}
             axisLine={false}
             tickLine={false}
             dy={6}
+            minTickGap={18}
           />
           <YAxis
+            allowDecimals={false}
             tick={{ fontSize: 11, fill: tickColor }}
             axisLine={false}
             tickLine={false}

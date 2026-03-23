@@ -50,6 +50,8 @@ function InsightItem({ insight }) {
 }
 
 function AIInsightsPanel({ insights = [] }) {
+  const normalizedInsights = Array.isArray(insights) ? insights : [];
+
   return (
     <div className="bg-white dark:bg-slate-800/80 dark:ring-1 dark:ring-slate-700/50 rounded-xl shadow-card dark:shadow-none px-5 py-5 transition-colors duration-200">
       {/* Header */}
@@ -71,7 +73,7 @@ function AIInsightsPanel({ insights = [] }) {
 
       {/* Insight list */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {insights.map((insight) => (
+        {normalizedInsights.map((insight) => (
           <InsightItem key={insight.id} insight={insight} />
         ))}
       </div>
