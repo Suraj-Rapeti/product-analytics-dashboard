@@ -13,6 +13,13 @@ import { Sun, Moon, Menu } from 'lucide-react';
 // Services
 import { getUsers, getOrders, getEvents } from './services/dataService';
 import { generateInsights } from './services/aiService';
+import {
+  buildDailyRevenueSeries,
+  buildDailyOrdersSeries,
+  buildEventDistribution,
+  buildMonthlyRevenueSeries,
+  rankDashboardInsights,
+} from './services/analyticsService';
 
 const PRESET_OPTIONS = [
   { id: '7d', label: '7D', days: 7 },
@@ -249,280 +256,28 @@ function Dashboard() {
   const topProductName = sortedProducts[0]?.[0] || 'N/A';
   const topProductUnits = sortedProducts[0]?.[1] || 0;
 
-  const toDateKey = (dateObj) => [
-    dateObj.getFullYear(),
-    String(dateObj.getMonth() + 1).padStart(2, '0'),
-    String(dateObj.getDate()).padStart(2, '0'),
-  ].join('-');
-
-  const isWithinRange = (dateObj, range) => dateObj && dateObj >= range.start && dateObj <= range.end;
-
   const revenueChartRange = resolveChartRange(revenueChartPreset, revenueChartStartDate, revenueChartEndDate);
   const ordersChartRange = resolveChartRange(ordersChartPreset, ordersChartStartDate, ordersChartEndDate);
   const eventsChartRange = resolveChartRange(eventsChartPreset, eventsChartStartDate, eventsChartEndDate);
   const monthlyChartRange = resolveChartRange(monthlyChartPreset, monthlyChartStartDate, monthlyChartEndDate);
 
-  const revenueChartStartDay = new Date(revenueChartRange.start);
-  revenueChartStartDay.setHours(0, 0, 0, 0);
-  const revenueChartEndDay = new Date(revenueChartRange.end);
-  revenueChartEndDay.setHours(0, 0, 0, 0);
-
-  const revenueDailyMapForChart = {};
-  orders.forEach((order) => {
-    const orderDate = parseDateSafe(order.date);
-    if (!isWithinRange(orderDate, revenueChartRange)) return;
-
-    const normalized = new Date(orderDate);
-    normalized.setHours(0, 0, 0, 0);
-    const dateKey = toDateKey(normalized);
-    revenueDailyMapForChart[dateKey] = (revenueDailyMapForChart[dateKey] || 0) + (order.amount || 0);
-  });
-
-  const revenueChartDays = Math.max(
-    1,
-    Math.floor((revenueChartEndDay - revenueChartStartDay) / (1000 * 60 * 60 * 24)) + 1,
-  );
-
-  const revenueChartData = Array.from({ length: revenueChartDays }, (_, index) => {
-    const current = new Date(revenueChartStartDay);
-    current.setDate(revenueChartStartDay.getDate() + index);
-    const dateKey = toDateKey(current);
-    return {
-      name: dateKey,
-      revenue: revenueDailyMapForChart[dateKey] || 0,
-    };
-  });
-
-  const ordersChartStartDay = new Date(ordersChartRange.start);
-  ordersChartStartDay.setHours(0, 0, 0, 0);
-  const ordersChartEndDay = new Date(ordersChartRange.end);
-  ordersChartEndDay.setHours(0, 0, 0, 0);
-
-  const dailyOrdersMapForChart = {};
-  orders.forEach((order) => {
-    const orderDate = parseDateSafe(order.date);
-    if (!isWithinRange(orderDate, ordersChartRange)) return;
-
-    const normalized = new Date(orderDate);
-    normalized.setHours(0, 0, 0, 0);
-    const dateKey = toDateKey(normalized);
-    dailyOrdersMapForChart[dateKey] = (dailyOrdersMapForChart[dateKey] || 0) + 1;
-  });
-
-  const ordersChartDays = Math.max(
-    1,
-    Math.floor((ordersChartEndDay - ordersChartStartDay) / (1000 * 60 * 60 * 24)) + 1,
-  );
-
-  const ordersChartData = Array.from({ length: ordersChartDays }, (_, index) => {
-    const current = new Date(ordersChartStartDay);
-    current.setDate(ordersChartStartDay.getDate() + index);
-    const dateKey = toDateKey(current);
-    return {
-      dateKey,
-      dayLabel: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      orders: dailyOrdersMapForChart[dateKey] || 0,
-    };
-  });
-
+  const revenueChartData = buildDailyRevenueSeries(orders, revenueChartRange);
+  const ordersChartData = buildDailyOrdersSeries(orders, ordersChartRange);
   const eventPalette = ['#0EA5E9', '#14B8A6', '#6366F1', '#F59E0B', '#F43F5E', '#8B5CF6'];
-  const eventCountsForChart = {};
-  events.forEach((event) => {
-    const eventDate = parseDateSafe(event.timestamp);
-    if (!isWithinRange(eventDate, eventsChartRange)) return;
-    const type = event.type || 'unknown';
-    eventCountsForChart[type] = (eventCountsForChart[type] || 0) + 1;
-  });
+  const eventsChartData = buildEventDistribution(events, eventsChartRange, eventPalette);
+  const monthlyRevenueChartData = buildMonthlyRevenueSeries(orders, monthlyChartRange);
 
-  const eventsChartData = Object.keys(eventCountsForChart).map((key, index) => ({
-    name: key,
-    value: eventCountsForChart[key],
-    color: eventPalette[index % eventPalette.length],
-  }));
-
-  const monthlyChartStartMonth = new Date(monthlyChartRange.start.getFullYear(), monthlyChartRange.start.getMonth(), 1);
-  const monthlyChartEndMonth = new Date(monthlyChartRange.end.getFullYear(), monthlyChartRange.end.getMonth(), 1);
-
-  const monthlyRevenueMapForChart = {};
-  orders.forEach((order) => {
-    const orderDate = parseDateSafe(order.date);
-    if (!isWithinRange(orderDate, monthlyChartRange)) return;
-    const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-    monthlyRevenueMapForChart[monthKey] = (monthlyRevenueMapForChart[monthKey] || 0) + (order.amount || 0);
-  });
-
-  const monthlyChartRangeLength =
-    (monthlyChartEndMonth.getFullYear() - monthlyChartStartMonth.getFullYear()) * 12 +
-    (monthlyChartEndMonth.getMonth() - monthlyChartStartMonth.getMonth()) +
-    1;
-
-  const monthlyRevenueChartData = Array.from({ length: Math.max(1, monthlyChartRangeLength) }, (_, index) => {
-    const monthDate = new Date(monthlyChartStartMonth.getFullYear(), monthlyChartStartMonth.getMonth() + index, 1);
-    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-
-    return {
-      name: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      revenue: monthlyRevenueMapForChart[monthKey] || 0,
-    };
-  });
-
-  const revenueChartSubtitle = getRangeSubtitle(revenueChartStartDay, revenueChartEndDay);
-  const ordersChartSubtitle = getRangeSubtitle(ordersChartStartDay, ordersChartEndDay);
+  const revenueChartSubtitle = getRangeSubtitle(revenueChartRange.start, revenueChartRange.end);
+  const ordersChartSubtitle = getRangeSubtitle(ordersChartRange.start, ordersChartRange.end);
   const eventsChartSubtitle = getRangeSubtitle(eventsChartRange.start, eventsChartRange.end);
-  const monthlyChartSubtitle = getRangeSubtitle(monthlyChartStartMonth, monthlyChartRange.end);
-
-  // 🔥 REVENUE CHART DATA (daily, aggregated)
-  const dailyRevenueMap = {};
-  let latestOrderDate = null;
-
-  filteredOrders.forEach((order) => {
-    const orderDate = new Date(order.date);
-    if (Number.isNaN(orderDate.getTime())) return;
-
-    const normalized = new Date(orderDate);
-    normalized.setHours(0, 0, 0, 0);
-    const dateKey = toDateKey(normalized);
-
-    dailyRevenueMap[dateKey] = (dailyRevenueMap[dateKey] || 0) + (order.amount || 0);
-
-    if (!latestOrderDate || normalized > latestOrderDate) {
-      latestOrderDate = normalized;
-    }
-  });
-
-  const rangeStartDay = new Date(computedRangeStart);
-  rangeStartDay.setHours(0, 0, 0, 0);
-  const rangeEndDay = new Date(computedRangeEnd);
-  rangeEndDay.setHours(0, 0, 0, 0);
-
-  const daysInRange = Math.max(1, Math.floor((rangeEndDay - rangeStartDay) / (1000 * 60 * 60 * 24)) + 1);
-
-  const revenueData = Array.from({ length: daysInRange }, (_, index) => {
-    const current = new Date(rangeStartDay);
-    current.setDate(rangeStartDay.getDate() + index);
-    const dateKey = toDateKey(current);
-
-    return {
-      name: dateKey,
-      revenue: dailyRevenueMap[dateKey] || 0,
-    };
-  });
-
-  const monthlyRevenueMap = {};
-  filteredOrders.forEach((order) => {
-    const orderDate = new Date(order.date);
-    if (Number.isNaN(orderDate.getTime())) return;
-
-    const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-    monthlyRevenueMap[monthKey] = (monthlyRevenueMap[monthKey] || 0) + (order.amount || 0);
-  });
-
-  const insightsStartMonth = new Date(rangeStartDay.getFullYear(), rangeStartDay.getMonth(), 1);
-  const insightsEndMonth = new Date(rangeEndDay.getFullYear(), rangeEndDay.getMonth(), 1);
-  const monthlyRangeLength =
-    (insightsEndMonth.getFullYear() - insightsStartMonth.getFullYear()) * 12 +
-    (insightsEndMonth.getMonth() - insightsStartMonth.getMonth()) +
-    1;
-
-  const monthlyRevenueData = Array.from({ length: monthlyRangeLength }, (_, index) => {
-    const monthDate = new Date(insightsStartMonth.getFullYear(), insightsStartMonth.getMonth() + index, 1);
-    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-
-    return {
-      name: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      revenue: monthlyRevenueMap[monthKey] || 0,
-    };
-  });
-
-  const allTimeMonthlyRevenueMap = {};
-  orders.forEach((order) => {
-    const orderDate = new Date(order.date);
-    if (Number.isNaN(orderDate.getTime())) return;
-
-    const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-    allTimeMonthlyRevenueMap[monthKey] = (allTimeMonthlyRevenueMap[monthKey] || 0) + (order.amount || 0);
-  });
-
-  const allTimeMonthlyStart = new Date(timelineMinDate.getFullYear(), timelineMinDate.getMonth(), 1);
-  const allTimeMonthlyEnd = new Date(timelineMaxDate.getFullYear(), timelineMaxDate.getMonth(), 1);
-  const allTimeMonthlyRangeLength =
-    (allTimeMonthlyEnd.getFullYear() - allTimeMonthlyStart.getFullYear()) * 12 +
-    (allTimeMonthlyEnd.getMonth() - allTimeMonthlyStart.getMonth()) +
-    1;
-
-  const insightsMonthlyRevenueData = Array.from({ length: allTimeMonthlyRangeLength }, (_, index) => {
-    const monthDate = new Date(allTimeMonthlyStart.getFullYear(), allTimeMonthlyStart.getMonth() + index, 1);
-    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-
-    return {
-      name: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      revenue: allTimeMonthlyRevenueMap[monthKey] || 0,
-    };
-  });
-
-  const insightsRangeSubtitle = getRangeSubtitle(allTimeMonthlyStart, timelineMaxDate);
-
-  const dailyOrdersMap = {};
-  filteredOrders.forEach((order) => {
-    const orderDate = new Date(order.date);
-    if (Number.isNaN(orderDate.getTime())) return;
-
-    const dateKey = toDateKey(orderDate);
-
-    dailyOrdersMap[dateKey] = (dailyOrdersMap[dateKey] || 0) + 1;
-  });
-
-  const ordersData = Array.from({ length: daysInRange }, (_, index) => {
-    const current = new Date(rangeStartDay);
-    current.setDate(rangeStartDay.getDate() + index);
-    const dateKey = toDateKey(current);
-
-    return {
-      dateKey,
-      dayLabel: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      orders: dailyOrdersMap[dateKey] || 0,
-    };
-  });
+  const monthlyChartSubtitle = getRangeSubtitle(monthlyChartRange.start, monthlyChartRange.end);
 
   // 🔥 AI INSIGHTS
   const insight = generateInsights(filteredUsers, filteredOrders, filteredEvents);
 
-  const insightPriority = {
-    critical: 0,
-    warning: 1,
-    healthy: 2,
-    positive: 2,
-    info: 3,
-  };
+  const keyInsightItems = rankDashboardInsights(insight, 3);
 
-  const keyInsightItems = [...insight]
-    .filter((item) => item.id !== 'insight-key-takeaway')
-    .sort((a, b) => (insightPriority[a.type] ?? 99) - (insightPriority[b.type] ?? 99))
-    .slice(0, 3)
-    .map((item) => {
-      const actionPart = item.description?.includes('Action:')
-        ? item.description.split('Action:')[1].trim()
-        : item.description;
-
-      const headline = actionPart
-        ?.split('.')
-        .map((part) => part.trim())
-        .filter(Boolean)[0] || item.title;
-
-      return {
-        id: item.id,
-        emoji: item.type === 'critical' ? '🚨' : item.type === 'warning' ? '⚠️' : '📈',
-        text: `${item.title}: ${headline}`,
-      };
-    });
-
-  const rangeSubtitle = getRangeSubtitle(rangeStartDay, rangeEndDay);
+  const rangeSubtitle = getRangeSubtitle(computedRangeStart, computedRangeEnd);
 
   const renderChartRangeControls = ({
     label,
@@ -601,7 +356,7 @@ function Dashboard() {
                 <Menu size={18} />
               </button>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 font-semibold">Analytics workspace</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 font-semibold">Product analytics dashboard with automated insights</p>
                 <h1 className="text-lg md:text-xl font-semibold capitalize text-slate-900 dark:text-slate-100">
                   {activeNav === 'dashboard' ? 'Overview' : activeNav}
                 </h1>

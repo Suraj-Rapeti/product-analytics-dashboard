@@ -1,70 +1,132 @@
-# Getting Started with Create React App
+# Product Analytics Dashboard with Automated Insights
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An end-to-end analytics dashboard that converts user, order, and event data into actionable business insights.
 
-## Available Scripts
+This project is designed to show product thinking, not only data visualization: each insight includes metric context, interpretation, and suggested action.
 
-In the project directory, you can run:
+## Problem It Solves
 
-### `npm start`
+Teams often track users, orders, and revenue separately, which makes decisions slow and reactive.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+This dashboard combines:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- product funnel behavior
+- conversion and order quality
+- trend and risk signals
+- automated recommendations
 
-### `npm test`
+to help answer: what is happening, why it is happening, and what to do next.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Core Features
 
-### `npm run build`
+- Multi-page analytics app: Dashboard, Users, Insights, Settings
+- Actionable AI-style insights with severity levels: Critical, Warning, Healthy
+- Insight format standardization: Metric -> Interpretation -> Action
+- Conversion rate and average order value tracking
+- Funnel analysis: `view_product -> add_to_cart -> checkout`
+- Critical alert detection (missing funnel, steep order drops, low conversion)
+- Per-chart date range controls with custom start/end dates
+- Users page pagination with configurable page size
+- Realistic data seeding model with user behavior simulation
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Advanced Feature
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Independent chart-level time filtering (7D / 30D / 90D / All / Custom) for each major chart.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Why it matters:
 
-### `npm run eject`
+- supports deeper comparative analysis
+- avoids one global filter hiding chart-specific patterns
+- makes dashboard behavior closer to real analytics tools
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Tech Stack
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- React 19 (Create React App)
+- Recharts
+- Tailwind CSS
+- Firebase Firestore
+- Lucide React icons
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Data Model
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+- `users`: profile, signup date, segment
+- `orders`: user relationship, product, amount, status, quantity, timestamp
+- `events`: event type, page, user relationship, timestamp
 
-## Learn More
+## Realistic Seed Simulation
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The seeding script generates behavior-driven data instead of random isolated records.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Includes:
 
-### Code Splitting
+- real user-to-order relationships
+- user segments: active, casual, inactive
+- funnel progression with drop-off
+- product demand bias and value bias
+- cancelled orders and sparse-user edge cases
+- temporal patterns (weekend/evening bias + monthly seasonality)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Getting Started
 
-### Analyzing the Bundle Size
+1. Install dependencies
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```bash
+npm install
+```
 
-### Making a Progressive Web App
+2. Create `.env` with Firebase values
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Required keys:
 
-### Advanced Configuration
+- `REACT_APP_FIREBASE_API_KEY`
+- `REACT_APP_FIREBASE_AUTH_DOMAIN`
+- `REACT_APP_FIREBASE_PROJECT_ID`
+- `REACT_APP_FIREBASE_STORAGE_BUCKET`
+- `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`
+- `REACT_APP_FIREBASE_APP_ID`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+3. Run the app
 
-### Deployment
+```bash
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+4. Seed realistic demo data
 
-### `npm run build` fails to minify
+```bash
+npm run seed
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Scripts
+
+- `npm start` - start local development server
+- `npm run build` - create production build
+- `npm test` - run tests
+- `npm run seed` - generate realistic Firestore seed data
+
+## Screenshots
+
+Add screenshots to improve portfolio impact:
+
+- `docs/screenshots/dashboard.png`
+- `docs/screenshots/insights.png`
+- `docs/screenshots/users.png`
+
+Example markdown:
+
+```md
+![Dashboard](docs/screenshots/dashboard.png)
+![Insights](docs/screenshots/insights.png)
+```
+
+## Demo
+
+- Live demo: add your deployment URL here
+- Repo: this repository
+
+## Portfolio Highlights
+
+- Strong product analytics framing (not just charts)
+- Prioritized insights and actionable recommendations
+- Realistic data simulation to stress-test insight logic
+- Clear separation of business metrics and behavior metrics

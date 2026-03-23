@@ -50,7 +50,7 @@ function Sidebar({ activeNav, onNavChange, isOpen, onClose }) {
           <BarChart3 size={16} className="text-white" />
         </div>
         <span className="text-[15px] font-semibold text-slate-800 dark:text-slate-100 tracking-tight">
-          Analytica<span className="text-brand-500 dark:text-brand-400">AI</span>
+          Product<span className="text-brand-500 dark:text-brand-400">IQ</span>
         </span>
       </div>
 
