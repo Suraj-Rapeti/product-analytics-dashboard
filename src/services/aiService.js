@@ -167,7 +167,6 @@ export const generateInsights = (users, orders, events) => {
   if (sortedProducts.length > 0) {
     const [topProductName, topProductUnits] = sortedProducts[0];
     const [lowProductName, lowProductUnits] = sortedProducts[sortedProducts.length - 1];
-    const topRevenue = productRevenue[topProductName] || 0;
 
     insights.push({
       id: 'insight-top-products',

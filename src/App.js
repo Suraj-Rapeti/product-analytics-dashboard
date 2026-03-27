@@ -4,10 +4,11 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
 import MetricCard from './components/MetricCard';
 import RevenueLineChart from './components/RevenueLineChart';
-import MonthlyRevenueAreaChart from './components/MonthlyRevenueAreaChart';
 import OrdersBarChart from './components/OrdersBarChart';
 import EventPieChart from './components/EventPieChart';
 import AIInsightsPanel from './components/AIInsightsPanel';
+import AlertsPanel from './components/AlertsPanel';
+import AnomaliesPanel from './components/AnomaliesPanel';
 import { Sun, Moon, Menu } from 'lucide-react';
 
 // Services
@@ -17,15 +18,16 @@ import {
   buildDailyRevenueSeries,
   buildDailyOrdersSeries,
   buildEventDistribution,
-  buildMonthlyRevenueSeries,
   rankDashboardInsights,
+  calculateMetrics,
+  detectAnomalies,
+  generateAlerts,
 } from './services/analyticsService';
 
 const PRESET_OPTIONS = [
-  { id: '7d', label: '7D', days: 7 },
-  { id: '30d', label: '30D', days: 30 },
-  { id: '90d', label: '90D', days: 90 },
-  { id: 'all', label: 'All', days: null },
+  { id: '7d', label: 'Last 7 days', days: 7 },
+  { id: '30d', label: 'Last 30 days', days: 30 },
+  { id: 'all', label: 'All time', days: null },
   { id: 'custom', label: 'Custom', days: null },
 ];
 
@@ -93,9 +95,6 @@ function Dashboard() {
   const [eventsChartPreset, setEventsChartPreset] = useState('30d');
   const [eventsChartStartDate, setEventsChartStartDate] = useState('');
   const [eventsChartEndDate, setEventsChartEndDate] = useState('');
-  const [monthlyChartPreset, setMonthlyChartPreset] = useState('all');
-  const [monthlyChartStartDate, setMonthlyChartStartDate] = useState('');
-  const [monthlyChartEndDate, setMonthlyChartEndDate] = useState('');
 
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -197,6 +196,9 @@ function Dashboard() {
   const filteredEvents = events.filter((event) => isInRange(parseDateSafe(event.timestamp)));
   const filteredUsers = users.filter((user) => isInRange(parseDateSafe(user.signupDate)));
 
+  // Calculate metrics using the analytics service
+  const metrics = calculateMetrics(filteredUsers, filteredOrders, filteredEvents);
+
   const userSearchTerm = userSearch.trim().toLowerCase();
   const now = new Date();
   const usersForList = filteredUsers.filter((user) => {
@@ -240,11 +242,11 @@ function Dashboard() {
     }
   }, [currentUsersPage, totalUsersPages]);
 
-  const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
-  const uniqueBuyerCount = new Set(filteredOrders.map((order) => order.userId).filter(Boolean)).size;
-  const conversionRate = filteredUsers.length > 0 ? (uniqueBuyerCount / filteredUsers.length) * 100 : 0;
-  const averageOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
+  const totalRevenue = metrics.totalRevenue;
+  const conversionRate = metrics.conversionRate;
+  const averageOrderValue = metrics.averageOrderValue;
 
+  // Get product distribution for reference
   const productOrderCount = {};
   filteredOrders.forEach((order) => {
     const product = order.product || 'Unknown';
@@ -252,25 +254,25 @@ function Dashboard() {
     productOrderCount[product] = (productOrderCount[product] || 0) + quantity;
   });
 
-  const sortedProducts = Object.entries(productOrderCount).sort((a, b) => b[1] - a[1]);
-  const topProductName = sortedProducts[0]?.[0] || 'N/A';
-  const topProductUnits = sortedProducts[0]?.[1] || 0;
+  // Generate alerts for this time period
+  const dashboardAlerts = generateAlerts(filteredUsers, filteredOrders, filteredEvents);
+
+  // Detect anomalies in the data
+  const rangeForAnomalies = { start: computedRangeStart, end: computedRangeEnd };
+  const detectedAnomalies = detectAnomalies(filteredOrders, rangeForAnomalies);
 
   const revenueChartRange = resolveChartRange(revenueChartPreset, revenueChartStartDate, revenueChartEndDate);
   const ordersChartRange = resolveChartRange(ordersChartPreset, ordersChartStartDate, ordersChartEndDate);
   const eventsChartRange = resolveChartRange(eventsChartPreset, eventsChartStartDate, eventsChartEndDate);
-  const monthlyChartRange = resolveChartRange(monthlyChartPreset, monthlyChartStartDate, monthlyChartEndDate);
 
   const revenueChartData = buildDailyRevenueSeries(orders, revenueChartRange);
   const ordersChartData = buildDailyOrdersSeries(orders, ordersChartRange);
   const eventPalette = ['#0EA5E9', '#14B8A6', '#6366F1', '#F59E0B', '#F43F5E', '#8B5CF6'];
   const eventsChartData = buildEventDistribution(events, eventsChartRange, eventPalette);
-  const monthlyRevenueChartData = buildMonthlyRevenueSeries(orders, monthlyChartRange);
 
   const revenueChartSubtitle = getRangeSubtitle(revenueChartRange.start, revenueChartRange.end);
   const ordersChartSubtitle = getRangeSubtitle(ordersChartRange.start, ordersChartRange.end);
   const eventsChartSubtitle = getRangeSubtitle(eventsChartRange.start, eventsChartRange.end);
-  const monthlyChartSubtitle = getRangeSubtitle(monthlyChartRange.start, monthlyChartRange.end);
 
   // 🔥 AI INSIGHTS
   const insight = generateInsights(filteredUsers, filteredOrders, filteredEvents);
@@ -368,27 +370,37 @@ function Dashboard() {
 
         <div className="px-4 md:px-8 py-6 md:py-8 space-y-6 md:space-y-7">
           <section className="rounded-3xl border border-slate-300/60 dark:border-slate-700/60 bg-gradient-to-r from-slate-700 via-slate-600 to-sky-700 px-5 py-6 md:px-8 md:py-8 text-white shadow-[0_12px_30px_rgba(15,23,42,0.22)] animate-fade-up">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/75 font-semibold">Performance snapshot</p>
-            <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight">Live intelligence for your operations</h2>
-            <p className="mt-2 text-sm md:text-base text-white/85 max-w-2xl">Track revenue, customer behavior, and order patterns in a streamlined executive view designed for fast decisions.</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/75 font-semibold">Real-time analytics</p>
+            <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight">What's happening in your business right now</h2>
+            <p className="mt-2 text-sm md:text-base text-white/85 max-w-2xl">Track orders, revenue, and customer behavior in real time. Identify problems before they cost you money.</p>
           </section>
 
           <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-900/75 backdrop-blur-md p-4 md:p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] animate-fade-up">
             <div className="flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Time filter</p>
-                <select
-                  value={selectedPreset}
-                  onChange={(e) => setSelectedPreset(e.target.value)}
-                  className="h-10 sm:max-w-[220px] px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-200"
-                  aria-label="Time filter"
-                >
-                  {PRESET_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">📅 Time Period</p>
+                <div className="flex flex-wrap gap-2">
+                  {PRESET_OPTIONS.filter(o => o.id !== 'custom').map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => setSelectedPreset(option.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        selectedPreset === option.id
+                          ? 'bg-blue-500 text-white shadow-md'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
                       {option.id === 'all' ? 'All Time' : option.label}
-                    </option>
+                    </button>
                   ))}
-                </select>
+                  <select
+                    value={selectedPreset}
+                    onChange={(e) => setSelectedPreset(e.target.value)}
+                    className="h-9 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200"
+                  >
+                    <option value="custom">Custom Range</option>
+                  </select>
+                </div>
               </div>
 
               {selectedPreset === 'custom' && (
@@ -401,7 +413,7 @@ function Dashboard() {
                       min={formatInputDate(timelineMinDate)}
                       max={formatInputDate(timelineMaxDate)}
                       onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                      className="h-10 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -412,13 +424,13 @@ function Dashboard() {
                       min={formatInputDate(timelineMinDate)}
                       max={formatInputDate(timelineMaxDate)}
                       onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                      className="h-10 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
                     />
                   </label>
                 </div>
               )}
 
-              <p className="text-xs text-slate-500 dark:text-slate-400">Applied range: {rangeSubtitle}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">📌 <span className="font-semibold">Applied range:</span> {rangeSubtitle}</p>
             </div>
           </section>
 
@@ -498,6 +510,10 @@ function Dashboard() {
                     ))}
                   </div>
                 </section>
+
+                <AlertsPanel alerts={dashboardAlerts} />
+
+                <AnomaliesPanel anomalies={detectedAnomalies} />
               </>
             )}
 
