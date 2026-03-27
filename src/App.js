@@ -19,10 +19,16 @@ import {
   buildDailyOrdersSeries,
   buildEventDistribution,
   rankDashboardInsights,
-  calculateMetrics,
   detectAnomalies,
   generateAlerts,
+  generateComparisonInsights,
 } from './services/analyticsService';
+import {
+  getPeriodRange,
+  getPreviousPeriodRange,
+  filterDataByRange,
+  calculateMetricsWithComparison,
+} from './utils/dataTransform';
 
 const PRESET_OPTIONS = [
   { id: '7d', label: 'Last 7 days', days: 7 },
@@ -41,12 +47,6 @@ const formatInputDate = (dateObj) => {
   const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
   const dd = String(dateObj.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-};
-
-const getDateFromInput = (value, fallback) => {
-  if (!value) return fallback;
-  const parsed = parseDateSafe(`${value}T00:00:00`);
-  return parsed || fallback;
 };
 
 const getRangeSubtitle = (startDate, endDate) => {
@@ -136,68 +136,33 @@ function Dashboard() {
   timelineMaxDate.setHours(0, 0, 0, 0);
 
   const resolveChartRange = (preset, customStart, customEnd) => {
-    const rangeEnd = new Date(timelineMaxDate);
-    let rangeStart = new Date(timelineMaxDate);
-
-    if (preset === 'all') {
-      rangeStart = new Date(timelineMinDate);
-    } else if (preset === 'custom') {
-      rangeStart = getDateFromInput(customStart, timelineMinDate);
-      const customRangeEnd = getDateFromInput(customEnd, timelineMaxDate);
-      rangeEnd.setTime(customRangeEnd.getTime());
-    } else {
-      const presetOption = PRESET_OPTIONS.find((item) => item.id === preset);
-      const days = presetOption?.days || 30;
-      rangeStart.setDate(rangeStart.getDate() - (days - 1));
-    }
-
-    if (rangeStart > rangeEnd) {
-      const temp = new Date(rangeStart);
-      rangeStart.setTime(rangeEnd.getTime());
-      rangeEnd.setTime(temp.getTime());
-    }
-
-    rangeStart.setHours(0, 0, 0, 0);
-    rangeEnd.setHours(23, 59, 59, 999);
-
-    return {
-      start: rangeStart,
-      end: rangeEnd,
-    };
+    return getPeriodRange(preset, customStart, customEnd, timelineMaxDate);
   };
 
-  const computedRangeEnd = new Date(timelineMaxDate);
-  let computedRangeStart = new Date(timelineMaxDate);
+  // Main dashboard period
+  const currentPeriodRange = getPeriodRange(selectedPreset, customStartDate, customEndDate, timelineMaxDate);
+  const previousPeriodRange = getPreviousPeriodRange(currentPeriodRange);
 
-  if (selectedPreset === 'all') {
-    computedRangeStart = new Date(timelineMinDate);
-  } else if (selectedPreset === 'custom') {
-    computedRangeStart = getDateFromInput(customStartDate, timelineMinDate);
-    const customEnd = getDateFromInput(customEndDate, timelineMaxDate);
-    computedRangeEnd.setTime(customEnd.getTime());
-  } else {
-    const preset = PRESET_OPTIONS.find((item) => item.id === selectedPreset);
-    const days = preset?.days || 30;
-    computedRangeStart.setDate(computedRangeStart.getDate() - (days - 1));
-  }
+  const filteredData = filterDataByRange(users, orders, events, currentPeriodRange);
+  const filteredUsers = filteredData.users;
+  const filteredOrders = filteredData.orders;
+  const filteredEvents = filteredData.events;
 
-  if (computedRangeStart > computedRangeEnd) {
-    const tmp = new Date(computedRangeStart);
-    computedRangeStart.setTime(computedRangeEnd.getTime());
-    computedRangeEnd.setTime(tmp.getTime());
-  }
+  // Previous period data for comparison
+  const previousPeriodData = filterDataByRange(users, orders, events, previousPeriodRange);
 
-  computedRangeStart.setHours(0, 0, 0, 0);
-  computedRangeEnd.setHours(23, 59, 59, 999);
+  // Calculate metrics and comparisons
+  const metricsWithComparison = calculateMetricsWithComparison(
+    filteredUsers,
+    filteredOrders,
+    filteredEvents,
+    previousPeriodData.users,
+    previousPeriodData.orders,
+    previousPeriodData.events
+  );
 
-  const isInRange = (dateObj) => dateObj && dateObj >= computedRangeStart && dateObj <= computedRangeEnd;
-
-  const filteredOrders = orders.filter((order) => isInRange(parseDateSafe(order.date)));
-  const filteredEvents = events.filter((event) => isInRange(parseDateSafe(event.timestamp)));
-  const filteredUsers = users.filter((user) => isInRange(parseDateSafe(user.signupDate)));
-
-  // Calculate metrics using the analytics service
-  const metrics = calculateMetrics(filteredUsers, filteredOrders, filteredEvents);
+  const metrics = metricsWithComparison.current;
+  const comparisons = metricsWithComparison.comparisons;
 
   const userSearchTerm = userSearch.trim().toLowerCase();
   const now = new Date();
@@ -242,9 +207,9 @@ function Dashboard() {
     }
   }, [currentUsersPage, totalUsersPages]);
 
-  const totalRevenue = metrics.totalRevenue;
+  const totalRevenue = metrics.revenue;
   const conversionRate = metrics.conversionRate;
-  const averageOrderValue = metrics.averageOrderValue;
+  const averageOrderValue = metrics.aov;
 
   // Get product distribution for reference
   const productOrderCount = {};
@@ -258,8 +223,11 @@ function Dashboard() {
   const dashboardAlerts = generateAlerts(filteredUsers, filteredOrders, filteredEvents);
 
   // Detect anomalies in the data
-  const rangeForAnomalies = { start: computedRangeStart, end: computedRangeEnd };
+  const rangeForAnomalies = currentPeriodRange;
   const detectedAnomalies = detectAnomalies(filteredOrders, rangeForAnomalies);
+
+  // Generate period comparison insights (NEW - NEXT-LEVEL ANALYTICS)
+  const comparisonInsights = generateComparisonInsights(comparisons);
 
   const revenueChartRange = resolveChartRange(revenueChartPreset, revenueChartStartDate, revenueChartEndDate);
   const ordersChartRange = resolveChartRange(ordersChartPreset, ordersChartStartDate, ordersChartEndDate);
@@ -277,9 +245,12 @@ function Dashboard() {
   // 🔥 AI INSIGHTS
   const insight = generateInsights(filteredUsers, filteredOrders, filteredEvents);
 
-  const keyInsightItems = rankDashboardInsights(insight, 3);
+  // Combine all insights: base insights + period comparison insights
+  const allInsights = [...insight, ...comparisonInsights];
 
-  const rangeSubtitle = getRangeSubtitle(computedRangeStart, computedRangeEnd);
+  const keyInsightItems = rankDashboardInsights(allInsights, 3);
+
+  const rangeSubtitle = getRangeSubtitle(currentPeriodRange.start, currentPeriodRange.end);
 
   const renderChartRangeControls = ({
     label,

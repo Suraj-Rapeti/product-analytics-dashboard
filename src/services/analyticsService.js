@@ -331,3 +331,103 @@ export const generateAlerts = (users, orders, events) => {
 
   return alerts;
 };
+
+// ============================================================
+// PERIOD COMPARISON INSIGHTS (Next-Level Analytics)
+// ============================================================
+
+export const generateComparisonInsights = (comparisons) => {
+  const insights = [];
+
+  // Revenue insights
+  const revChange = parseFloat(comparisons.revenue.changePercent);
+  if (revChange > 15) {
+    insights.push({
+      id: 'insight-revenue-growth',
+      type: 'positive',
+      title: '📈 Strong Revenue Growth',
+      description: `Revenue increased ${revChange.toFixed(1)}% compared to previous period. Action: capitalize on this momentum with increased marketing spend.`,
+    });
+  } else if (revChange < -15) {
+    insights.push({
+      id: 'insight-revenue-decline',
+      type: 'critical',
+      title: '📉 Revenue Declining',
+      description: `Revenue dropped ${Math.abs(revChange).toFixed(1)}% vs previous period. Action: identify what changed—pricing, traffic, or conversion rate.`,
+    });
+  }
+
+  // Order insights
+  const ordChange = parseFloat(comparisons.orders.changePercent);
+  if (ordChange > 20) {
+    insights.push({
+      id: 'insight-order-surge',
+      type: 'positive',
+      title: '📦 Order Volume Surge',
+      description: `Orders up ${ordChange.toFixed(1)}% period-over-period. Action: ensure inventory and fulfillment can keep up.`,
+    });
+  } else if (ordChange < -20) {
+    insights.push({
+      id: 'insight-order-decline',
+      type: 'warning',
+      title: '⚠️ Order Volume Declining',
+      description: `Orders down ${Math.abs(ordChange).toFixed(1)}%. Action: audit product pages and checkout process.`,
+    });
+  }
+
+  // Conversion insights
+  const convChange = parseFloat(comparisons.conversionRate.changePercent);
+  if (convChange > 10) {
+    insights.push({
+      id: 'insight-conversion-improving',
+      type: 'positive',
+      title: '✅ Conversion Improving',
+      description: `Conversion rate improved ${convChange.toFixed(1)}%. Action: replicate what's working in this period.`,
+    });
+  } else if (convChange < -10) {
+    insights.push({
+      id: 'insight-conversion-declining',
+      type: 'critical',
+      title: '🔴 Conversion Rate Falling',
+      description: `Conversion dropped ${Math.abs(convChange).toFixed(1)}%. Action: something broke—check checkout logs and UX.`,
+    });
+  }
+
+  // AOV insights
+  const aovChange = parseFloat(comparisons.aov.changePercent);
+  if (aovChange > 15) {
+    insights.push({
+      id: 'insight-aov-increase',
+      type: 'positive',
+      title: '💰 Average Order Value Up',
+      description: `AOV increased ${aovChange.toFixed(1)}%. Action: customers are buying more—test higher-priced products.`,
+    });
+  } else if (aovChange < -15) {
+    insights.push({
+      id: 'insight-aov-decrease',
+      type: 'warning',
+      title: '📉 Lower Order Values',
+      description: `AOV dropped ${Math.abs(aovChange).toFixed(1)}%. Action: review product mix and bundle pricing.`,
+    });
+  }
+
+  // User growth insights
+  const userChange = parseFloat(comparisons.users.changePercent);
+  if (userChange > 10) {
+    insights.push({
+      id: 'insight-user-growth',
+      type: 'positive',
+      title: '👥 User Growth Strong',
+      description: `New users up ${userChange.toFixed(1)}%. Action: ensure onboarding experience is smooth.`,
+    });
+  } else if (userChange < -5) {
+    insights.push({
+      id: 'insight-user-decline',
+      type: 'warning',
+      title: '⚠️ Fewer New Users',
+      description: `New user signups down ${Math.abs(userChange).toFixed(1)}%. Action: review acquisition channels.`,
+    });
+  }
+
+  return insights;
+};
